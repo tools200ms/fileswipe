@@ -1,0 +1,8 @@
+
+*~
+pkg/*
+test/*
+
+# Development IDEs:
+.kdev4/*
+*.kdev4

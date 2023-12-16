@@ -29,6 +29,10 @@ _FILE_REMOVE_CMD="rm"
 [ -n "$DEBUG" ] && [[ $(echo "$DEBUG" | tr '[:upper:]' '[:lower:]') =~ ^y|yes|1|on$ ]] && \
         set -xe || set -e
 
+OUTPUT="echo"
+# silent mode
+# OUTPUT="echo 1>/tmp/test"
+
 if [ "$_FILE_REMOVE_CMD" != "$EXEC_RM" ]; then
 	echo "Pretend mode ON"
 fi
@@ -101,16 +105,16 @@ fi
 if [ -f $MARK_FILE ] && [ $(($(date +%s) - $(date +%s -r "$MARK_FILE") + $TIME_LOCK_TEST_MARGIN)) -lt $SWIPE_DEFER_SEC ]; then
 
 	if [ $OPT_FORCE -eq 0 ]; then
-		echo "No action due to early call, swipe allowed after a $SWIPE_DEFER_DAYS day(s) from last swipe: "
-		cat $MARK_FILE
+		echo "No action due to early call, swipe allowed after $SWIPE_DEFER_DAYS day(s) since last removal."
+		echo "Last removal date: $(date -r $MARK_FILE)"
 
 		exit 0
 	else
-		echo "Forcing swipe operation"
-		cat $MARK_FILE
+		echo "Forcing swipe operation, files might be removed although defer time has not been exceeded"
+		echo "Last removal date: $(date -r $MARK_FILE)"
 
 		while
-			read -p "Type 'yes|y' or 'no|n': " conf
+			read -p "If you are sure, type 'yes|y', otherwise 'no|n'" conf
 
 			case $(echo $conf | tr '[:upper:]' '[:lower:]') in
 				y|yes)
@@ -128,8 +132,12 @@ if [ -f $MARK_FILE ] && [ $(($(date +%s) - $(date +%s -r "$MARK_FILE") + $TIME_L
 	fi
 fi
 
-echo "Last run of $0 $ASWIPE_PATH: $(date)" > $MARK_FILE
-
+# create new mark file
+rm -f $MARK_FILE
+cat > $MARK_FILE <<EOF
+Last run of $0 $ASWIPE_PATH:
+    $(date)
+EOF
 
 TO_KEEP_CNT=0
 FOR_REMOVAL_CNT=0
@@ -165,18 +173,20 @@ done
 if [ $TO_KEEP_CNT -gt $KEEP_MIN_CNT ]; then
 	if [ -n "$RM_LIST" ]; then
 		echo "Removing: "
-		SUMMARY="$(du -ch $RM_LIST | tail -n 1): $FOR_REMOVAL_CNT file(s)"
-		echo "$SUMMARY"
+		echo "    $(du -ch $RM_LIST | tail -n 1): $FOR_REMOVAL_CNT file(s)"
 
 		$EXEC_RM $RM_LIST
+
+		SUMMARY="$(du -ch $RM_LIST | tail -n 1): $FOR_REMOVAL_CNT file(s) removed"
+		echo "$SUMMARY"
 	else
 		echo "No files found for removal"
-		SUMMARY="No files old enough"
+		SUMMARY="No files old enough that could be removed"
 	fi
 else
 	# keep last 30 files regardless of age
 	echo "Too low pool ($TO_KEEP_CNT files - min. to keep: $KEEP_MIN_CNT), skipping any removals"
-	SUMMARY="Too low pool"
+	SUMMARY="Too low file pool"
 fi
 
 echo "    with result:  $SUMMARY" >> $MARK_FILE
