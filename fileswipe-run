@@ -1,0 +1,42 @@
+#!/bin/bash
+
+[ -n "$DEBUG" ] && [[ $(echo "$DEBUG" | tr '[:upper:]' '[:lower:]') =~ ^y|yes|1|on$ ]] && \
+        set -xe || set -e
+
+[ -n "$PRETEND" ] && [[ $(echo "$PRETEND" | tr '[:upper:]' '[:lower:]') =~ ^y|yes|1|on$ ]] && \
+        FW_EXEC='fileswipe.sh --pretend' || FW_EXEC='fileswipe.sh'
+
+TAB_FILE="/etc/fwtab"
+LOG_FILE="/var/log/fileswipe.log"
+
+TMP_FILE=$(mktemp)
+
+
+while read line; do
+
+        tline=$(echo $line)
+
+        if [ -z "$tline" ] || [ $(echo -n "$tline" | egrep '^#' | wc -c) -ne 0 ] ; then
+                # skip comments and empty lines
+                continue;
+        fi
+
+        aargs=($line)
+
+        SWIPE_DIR=${aargs[0]}
+        DEFERT=${aargs[1]}
+        RMFREQ=${aargs[2]}
+
+        S_UID=$(stat -c %U $SWIPE_DIR)
+
+        sudo -u $S_UID $FW_EXEC $SWIPE_DIR $DEFERT $RMFREQ 2>&1 > $TMP_FILE
+
+        if [ -s $TMP_FILE ] ; then
+                cat $TMP_FILE >> $LOG_FILE
+        fi
+
+done <$TAB_FILE
+
+rm $TMP_FILE
+
+exit 0
