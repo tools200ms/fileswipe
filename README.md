@@ -32,7 +32,7 @@ where:
 `/path/to/directory` is a path to directory holding file set for potential removal.
 
 `1week` is removal `defer time`, files that are younger will be keep, only older files will
-`be considered for removal in accordance with `removal frequency` that is a next argument.
+be considered for removal in accordance with `removal frequency` that is a next argument.
 
 `2` is a `removal frequency`, `2` means to remove every second file, `1` means to removal of
 all files that passed `defer time`, `3` or `4` tells to remove every third or forth file.
