@@ -40,16 +40,16 @@ all files that passed `defer time`, `3` or `4` tells to remove every third or fo
 
 `defer time` is a number directly postfixed with `day`, `days`, `week` or `weeks`.
 
---------------------------------------------------------------------------------------------
+
 **NOTE 1:**
 **FilesWipe** will not remove files even if its `defer time` has passed if there is too little files in a directory.
-This is to prevent from losing data in the case if directory has not been feed with a fresh versions.
---------------------------------------------------------------------------------------------
+This is to prevent data loss in the case if directory has not been feed with a fresh versions.
 
---------------------------------------------------------------------------------------------
+
+
 **NOTE 2:**
 **FilesWipe** determinates file age by reading *last modification* time.
---------------------------------------------------------------------------------------------
+
 
 ## Usage - periodic swipe
 
@@ -65,11 +65,11 @@ Usually it's a matter of placing that file in `/etc/cron.daily/` or a like direc
 /path/to/directory    1week    2
 ```
 
---------------------------------------------------------------------------------------------
+
 **NOTE 3:**
 `fileswipe.sh` is launched (by `fileswipe-run`) with a privileges of a directory owner
 (directory holding files for wipe). Make sure proper 'read-write-search' permissions are set.
---------------------------------------------------------------------------------------------
+
 
 # Summary
 For any suggestions, feature requests etc. please feel free to fill [Issues](https://github.com/tools200ms/fileswipe/issues)
