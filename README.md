@@ -34,7 +34,7 @@ where:
 `1week` is removal `defer time`, files that are younger will be keep, only older files will
 be considered for removal in accordance with `removal frequency` that is a next argument.
 
-`2` is a `removal frequency`, `2` means to remove every second file, `1` means to removal of
+`2` is a `removal frequency`, `2` means to remove every second file, `1` means to remove
 all files that passed `defer time`, `3` or `4` tells to remove every third or forth file.
 
 
@@ -68,7 +68,7 @@ Usually it's a matter of placing that file in `/etc/cron.daily/` or a like direc
 
 **NOTE 3:**
 `fileswipe.sh` is launched (by `fileswipe-run`) with a privileges of a directory owner
-(directory holding files for wipe). Make sure proper 'read-write-search' permissions are set.
+(directory holding files for wipe). Make sure proper 'read-write-search' permissions are set correctly.
 
 
 # Summary
