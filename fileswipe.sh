@@ -152,6 +152,8 @@ elif [ ! -d $MARK_DIR ]; then
 	exit 2
 fi
 
+echo "Wipe call for: '$ASWIPE_PATH'"
+
 # Check when last swipe took a place
 if [ -f $MARK_FILE ] && [ $(($(date +%s) - $(date +%s -r "$MARK_FILE") + $TIME_LOCK_TEST_MARGIN)) -lt $SWIPE_DEFER_SEC ]; then
 
