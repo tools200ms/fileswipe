@@ -2,14 +2,11 @@
 
 **FilesWipe** is a set of Bash scripts developed to do a simple job:
 
-* removal of an old (backup) files
+* removal of an old (backup and other) files
 
-In the case of small databases it's OK to setup periodic database dumps.
-Also, it's good to keep versioning, thus usually such a backup is a set of
-files named `backup-<date>_dbdump.sql.xz` that are added on e.g. daily basis
-to a certain directory.
+In the case of a small databases it's OK to set up periodic database dumps. So after all there is a list of files such as `backup-<dump date>_dbdump.sql.xz`.
 
-But, to ensure that a data set is not growing 'limitlessly', there is the need for
+To ensure that a data set is not growing 'limitlessly', there is the need for
 an old file removal. Thus, **FilesWipe** has been developed, additionally it
 provides:
 
@@ -17,58 +14,62 @@ provides:
 * Configuration file
 * Countermeasures to prevent from purging all data
 
-It's a Bash shell program, I run it on VM's that collect various files. Files are
-keep for a certain amount of time, after which data is removed to keep space usage in balance.
-DB dump files is just one example, other is a purge of an old cache files.
+It's a `bash` shell script, thus it is practically 'dependency free' making it a good solution for embedded systems. It can be used to purge mentioned database dump files, but also other periodic backup files or cache files.
 
-## Usage - single swipe
+## Usage
+This packege comes with two scripts: 
+* fileswipe - cleanup directory indicated by command's argument
+* fileswipe-all - cleanup directories indicated in `/etc/fwtab` file
 
-**FilesWipe** can be run directly with command:
+## Setup
+Install by simply coping `fileswipe` and `fileswipe-all` to `/usr/local/bin`:
+```bash
+git clone https://github.com/tools200ms/fileswipe.git
+cd fileswipe/
+sudo cp fileswipe fileswipe-run /usr/local/bin/
+sudo chmod +x /usr/local/bin/fileswipe*
+```
+
+## Direct call 'fileswipe'
+**FilesWipe** can be run directly by command:
 ````bash
-fileswipe.sh /path/to/directory 1week 2
+fileswipe /path/to/directory 1week 2
 ````
 where:
 
-`/path/to/directory` is a path to directory holding file set for potential removal.
+* `/path/to/directory` is a path to directory with files designed for a potential removal.
 
-`1week` is removal `defer time`, files that are younger will be keep, only older files will
-be considered for removal in accordance with `removal frequency` that is a next argument.
+* `1week` is removal `defer time`, files that are younger will be keeped, only older files will be considered for removal in accordance with `removal frequency` that is given as a next argument.
 
-`2` is a `removal frequency`, `2` means to remove every second file, `1` means to remove
-all files that passed `defer time`, `3` or `4` tells to remove every third or forth file.
+* `2` is a `removal frequency`, `2` means to remove every second file, `1` means to remove all files that passed `defer time`, `3` or `4` tells to remove every third or forth file.
 
 
-`defer time` is a number directly postfixed with `day`, `days`, `week` or `weeks`.
-
+`defer time` is a number directly followed by `day`, `days`, `week` or `weeks` keyword.
 
 **NOTE 1:**
-**FilesWipe** will not remove files even if its `defer time` has passed if there is too little files in a directory.
-This is to prevent data loss in the case if directory has not been feed with a fresh versions.
-
+**FilesWipe** will not remove files even if its `defer time` has passed if there is too little files in a directory. This is to prevent data loss in the case if directory has not been feed with a fresh data.
 
 
 **NOTE 2:**
 **FilesWipe** determinates file age by reading *last modification* time.
 
+## '/etc/fwtab' file
+The list of directories and removal policy can be added into `/etc/fwtab` file:
+```fstab
+# This is a content of '/etc/fwtab'
 
-## Usage - periodic swipe
-
-To have **FilesWipe** to do jobs periodically add `fileswipe-run` to be launched by Cron as `root` user on preferably daily basis.
-
-Usually it's a matter of placing that file in `/etc/cron.daily/` or a like directory.
-
-`fileswipe-run` reads `/etc/fwtab` that is holding desired configuration:
-
+/srv/dbdump2   1week     2
+/srv/dbdump2   2weeks    2
 ```
-# This is a content of '/etc/fwtab', keep here configuration for FilesWipe
+This directory is read by `fileswipe-all` which, when run does an appropriate cleanings.
 
-/path/to/directory    1week    2
+### Usage - periodic wipe
+
+To have **FilesWipe** to do jobs periodically link `fileswipe-all` to `/etc/cron.daily/`:
+```bash
+ln -s /usr/local/bin/fileswipe-all /etc/cron.daily/
 ```
-
-
-**NOTE 3:**
-`fileswipe.sh` is launched (by `fileswipe-run`) with a privileges of a directory owner
-(directory holding files for wipe). Make sure proper 'read-write-search' permissions are set correctly.
+... or, other 'cron' diectory if your system applies other convention.
 
 
 # Summary

@@ -4,7 +4,7 @@
         set -xe || set -e
 
 [ -n "$PRETEND" ] && [[ $(echo "$PRETEND" | tr '[:upper:]' '[:lower:]') =~ ^y|yes|1|on$ ]] && \
-        FW_EXEC='fileswipe.sh --pretend' || FW_EXEC='fileswipe.sh'
+        FW_EXEC='fileswipe --pretend' || FW_EXEC='fileswipe'
 
 TAB_FILE="/etc/fwtab"
 LOG_FILE="/var/log/fileswipe.log"
