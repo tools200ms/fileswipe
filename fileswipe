@@ -39,6 +39,8 @@ if [ "$_FILE_REMOVE_CMD" != "$EXEC_RM" ]; then
 fi
 
 MARK_DIR='/var/spool/fileswipe.timemark/'
+TAB_FILE="/etc/fwtab"
+LOG_FILE="/var/log/fileswipe.log"
 
 OPT_FORCE=0
 
@@ -50,26 +52,38 @@ print_helpmsg_and_exit () {
 
 	cat << EOF
 $(basename $0) [--force|-f --pretend|-p] <dir path> <defer time> <rm freq.>
+$(basename $0) [--force|-f --pretend|-p] all <fwtab file path>
+
 	selectively remove files from <dir path> location
-	--force|-f   - force selective removal, ignore time lock
-	--pretend|-p - don't remove just pretend
-	<defer time> - time within files removal is deferred, all files that
+	--force|-f   - Force selective removal, ignore time lock.
+	--pretend|-p - Don't remove just pretend.
+	<defer time> - Time within files removal is deferred, all files that
 	               are not old enough (specified by defer time) are not
-	               removed
-	<rm freq.>   - removal frequency of files after 'defer time' period
-	               is passed
+	               removed.
+	<rm freq.>   - Removal frequency of files after 'defer time' period
+	               is passed.
+
+	all          - Wipe files as defined in configuration file. 
+				   If faile name is not provided, default is used: 
+				   '/etc/fwtab'.
 
 	Examples:
 	$(basename $0) /path/to/directory 1week 2
-	    remove every second file from '/path/to/directory' that is older
-	    then 1week
+	    Remove every second file from '/path/to/directory' that is older
+	    then 1week.
 
 	$(basename $0) /path/to/directory 7days 1
-	    remove files from '/path/to/directory' that is older then 7 days
+	    Remove files from '/path/to/directory' that is older then 7 days.
 
 	$(basename $0) /path/to/directory 4weeks 3
-	    remove every third file from '/path/to/directory' that has passed
-	    one lunar cycle
+	    Remove every third file from '/path/to/directory' that has passed
+	    one lunar cycle.
+	
+	$(basename $0) all
+		Read '/etc/fwtab' and perform cleanning as defined in this file.
+		Example '/etc/fwtab' snip:
+		/srv/dbdump2   1week     2
+
 
 $(basename $0) --help|-h
 	print this help
@@ -103,6 +117,9 @@ for a in "$@"; do
 		+([0-9]))
 			RM_FREQ=$a
 		;;
+		all)
+			READ_FWTAB=$TAB_FILE
+		;;
 		*)
 			if [ $(echo $a | cut -c -1) = '-' ]; then
 				print_helpmsg_and_exit "Unknown option"
@@ -112,136 +129,207 @@ for a in "$@"; do
 	esac
 done
 
-shopt -u extglob
-
-[ -z $SWIPE_PATH ] && print_helpmsg_and_exit "Missing dir. path"
-
-if [ -d $SWIPE_PATH ]; then
-	# absolute directory path
-	ASWIPE_PATH=$(cd $SWIPE_PATH; pwd -P)
-else
-	print_helpmsg_and_exit "Path is not pointing to directory"
-fi
-
-[ -z $SWIPE_DEFER_DAYS ] && print_helpmsg_and_exit "Provide all required arguments"
-if [ $SWIPE_DEFER_DAYS -lt 7 ] ; then
-	echo "File removal defer time must be at least 7days"
-	exit 2
-fi
-
-[ -z $RM_FREQ ] && print_helpmsg_and_exit "Provide all required arguments"
-if [ $RM_FREQ -lt 1 ] || [ $RM_FREQ -gt 16 ]; then
-	echo "Removal frequency must be between [1:16] range"
-	exit 2
-fi
-
-SWIPE_DEFER_SEC=$(($SWIPE_DEFER_DAYS*24*60*60))
-KEEP_MIN_CNT=$(($SWIPE_DEFER_DAYS*4)) # 7 * 4
-TIME_LOCK_TEST_MARGIN=$((65*60)) # one hour and 5 min.
+#shopt -u extglob
 
 
-MARK_FILE=$MARK_DIR$(echo $ASWIPE_PATH | cut -c 2- | sed 's/\//_/g')
+swipe() {
+	local ASWIPE_PATH=$1
+	local SWIPE_DEFER_DAYS=$2
+	local RM_FREQ=$3
 
-if [ ! -e $MARK_DIR ]; then
-	if ! $(mkdir $MARK_DIR) ; then
-		echo "Create '$MARK_DIR' directory, ensure full access for $(id -u):$(id -g) (current user)"
+	[ -z $SWIPE_DEFER_DAYS ] && print_helpmsg_and_exit "Provide all required arguments"
+	if [ $SWIPE_DEFER_DAYS -lt 7 ] ; then
+		$OUTPUT "File removal defer time must be at least 7days"
 		exit 2
 	fi
-elif [ ! -d $MARK_DIR ]; then
-	echo "'$MARK_DIR' shall be a directory"
-	exit 2
-fi
 
-echo "Wipe call for: '$ASWIPE_PATH'"
-
-# Check when last swipe took a place
-if [ -f $MARK_FILE ] && [ $(($(date +%s) - $(date +%s -r "$MARK_FILE") + $TIME_LOCK_TEST_MARGIN)) -lt $SWIPE_DEFER_SEC ]; then
-
-	if [ $OPT_FORCE -eq 0 ]; then
-		echo "No action due to early call, swipe allowed after $SWIPE_DEFER_DAYS day(s) since last removal."
-		echo "Last removal date: $(date -r $MARK_FILE)"
-
-		exit 0
-	else
-		echo "Forcing swipe operation, files might be removed although defer time has not been exceeded"
-		echo "Last removal date: $(date -r $MARK_FILE)"
-
-		while
-			read -p "If you are sure, type 'yes|y', otherwise 'no|n'" conf
-
-			case $(echo $conf | tr '[:upper:]' '[:lower:]') in
-				y|yes)
-					break
-				;;
-				n|no)
-					echo "Exiting"
-					exit 3
-				;;
-				*)
-					continue
-				;;
-			esac
-		do true; done
+	[ -z $RM_FREQ ] && print_helpmsg_and_exit "Provide all required arguments"
+	if [ $RM_FREQ -lt 1 ] || [ $RM_FREQ -gt 16 ]; then
+		$OUTPUT "Removal frequency must be between [1:16] range"
+		exit 2
 	fi
-fi
 
-# create new mark file
-rm -f $MARK_FILE
-cat > $MARK_FILE <<EOF
+	SWIPE_DEFER_SEC=$(($SWIPE_DEFER_DAYS*24*60*60))
+	KEEP_MIN_CNT=$(($SWIPE_DEFER_DAYS*4)) # 7 * 4
+	TIME_LOCK_TEST_MARGIN=$((65*60)) # one hour and 5 min.
+
+
+	MARK_FILE=$MARK_DIR$(echo $ASWIPE_PATH | cut -c 2- | sed 's/\//_/g')
+
+	if [ ! -e $MARK_DIR ]; then
+		if ! $(mkdir $MARK_DIR) ; then
+			$OUTPUT "Create '$MARK_DIR' directory, ensure full access for $(id -u):$(id -g) (current user)"
+			exit 2
+		fi
+	elif [ ! -d $MARK_DIR ]; then
+		$OUTPUT "'$MARK_DIR' shall be a directory"
+		exit 2
+	fi
+
+	$OUTPUT "Wipe call for: '$ASWIPE_PATH'"
+
+	# Check when last swipe took a place
+	if [ -f $MARK_FILE ] && [ $(($(date +%s) - $(date +%s -r "$MARK_FILE") + $TIME_LOCK_TEST_MARGIN)) -lt $SWIPE_DEFER_SEC ]; then
+
+		if [ $OPT_FORCE -eq 0 ]; then
+			$OUTPUT "No action due to early call, swipe allowed after $SWIPE_DEFER_DAYS day(s) since last removal."
+			$OUTPUT "Last removal date: $(date -r $MARK_FILE)"
+
+			exit 0
+		else
+			$OUTPUT "Forcing swipe operation, files might be removed although defer time has not been exceeded"
+			$OUTPUT "Last removal date: $(date -r $MARK_FILE)"
+
+			while
+				read -p "If you are sure, type 'yes|y', otherwise 'no|n'" conf
+
+				case $(echo $conf | tr '[:upper:]' '[:lower:]') in
+					y|yes)
+						break
+					;;
+					n|no)
+						$OUTPUT "Exiting"
+						exit 3
+					;;
+					*)
+						continue
+					;;
+				esac
+			do true; done
+		fi
+	fi
+
+	# create new mark file
+	rm -f $MARK_FILE
+	cat > $MARK_FILE <<EOF
 Last run of $0 $ASWIPE_PATH:
     $(date)
 EOF
 
-TO_KEEP_CNT=0
-FOR_REMOVAL_CNT=0
-RM_LIST=""
+	TO_KEEP_CNT=0
+	FOR_REMOVAL_CNT=0
+	RM_LIST=""
 
-#date_integrity_chk_status=0
-parity=$(($RM_FREQ-1))
-for file in $(find "$SWIPE_PATH" -type f | sort); do
-	age_in_sec=$(($(date +%s) - $(date +%s -r "$file")))
+	#date_integrity_chk_status=0
+	parity=$(($RM_FREQ-1))
+	for file in $(find "$SWIPE_PATH" -type f | sort); do
+		age_in_sec=$(($(date +%s) - $(date +%s -r "$file")))
 
-	if [ $age_in_sec -gt $SWIPE_DEFER_SEC ] && parity=$((($parity + 1)%$RM_FREQ)) && [ $parity -eq 0 ]; then
-		echo -n 'For removal '
+		if [ $age_in_sec -gt $SWIPE_DEFER_SEC ] && parity=$((($parity + 1)%$RM_FREQ)) && [ $parity -eq 0 ]; then
+			$OUTPUT -n 'For removal '
 
-		FOR_REMOVAL_CNT=$(($FOR_REMOVAL_CNT+1))
-		RM_LIST="$RM_LIST $file"
+			FOR_REMOVAL_CNT=$(($FOR_REMOVAL_CNT+1))
+			RM_LIST="$RM_LIST $file"
 
 		#if [ $date_integrity_chk_status -ne 0 ]; then
 		#	echo "!File name might not reflect file creation time"
 		#fi
-	else
-		echo -n 'Keep        '
-		TO_KEEP_CNT=$(($TO_KEEP_CNT+1))
+		else
+			$OUTPUT -n 'Keep        '
+			TO_KEEP_CNT=$(($TO_KEEP_CNT+1))
 
 		#if [ $date_integrity_chk_status -eq 0 ]; then
 		#	date_integrity_chk_status=1
 		#fi
-	fi
+		fi
 
-	echo "$(($age_in_sec/(86400))) days old: $file"
-done
+		$OUTPUT "$(($age_in_sec/(86400))) days old: $file"
+	done
 
 
-if [ $TO_KEEP_CNT -gt $KEEP_MIN_CNT ]; then
-	if [ -n "$RM_LIST" ]; then
-		echo "Removing: "
-		echo "    $(du -ch $RM_LIST | tail -n 1): $FOR_REMOVAL_CNT file(s)"
+	if [ $TO_KEEP_CNT -gt $KEEP_MIN_CNT ]; then
+		if [ -n "$RM_LIST" ]; then
+			$OUTPUT "Removing: "
+			$OUTPUT "    $(du -ch $RM_LIST | tail -n 1): $FOR_REMOVAL_CNT file(s)"
 
-		$EXEC_RM $RM_LIST
+			$EXEC_RM $RM_LIST
 
-		SUMMARY="$(du -ch $RM_LIST | tail -n 1): $FOR_REMOVAL_CNT file(s) removed"
-		echo "$SUMMARY"
+			SUMMARY="$(du -ch $RM_LIST | tail -n 1): $FOR_REMOVAL_CNT file(s) removed"
+			$OUTPUT "$SUMMARY"
+		else
+			$OUTPUT "No files found for removal"
+			SUMMARY="No files old enough that could be removed"
+		fi
 	else
-		echo "No files found for removal"
-		SUMMARY="No files old enough that could be removed"
+		# keep last 30 files regardless of age
+		$OUTPUT "Too low pool ($TO_KEEP_CNT files - min. to keep: $KEEP_MIN_CNT), skipping any removals"
+		SUMMARY="Too low file pool"
 	fi
+
+	$OUTPUT "    with result:  $SUMMARY" >> $MARK_FILE
+}
+
+read_tabfile() {
+	local TMP_FILE=$(mktemp)
+
+	while read line; do
+
+        tline=$(echo $line)
+
+        if [ -z "$tline" ] || [ $(echo -n "$tline" | egrep '^#' | wc -c) -ne 0 ] ; then
+                # skip comments and empty lines
+                continue;
+        fi
+
+        aargs=($line)
+
+        local SWIPE_DIR=${aargs[0]}
+        local DEFERT=${aargs[1]}
+        local RMFREQ=${aargs[2]}
+		local defer_days=
+
+        S_UID=$(stat -c %U $SWIPE_DIR)
+
+		case $DEFERT in
+		 	+([0-9])d?(ay)?(s))
+		 		defer_days=$(echo $DEFERT | grep -Eo '^[0-9]+')
+		 	;;
+		 	+([0-9])w?(eek)?(s))
+		 		defer_days=$(($(echo $DEFERT | grep -Eo '^[0-9]+')*7))
+		 	;;
+		 	*)
+		 		print_helpmsg_and_exit "Wrong defer time format in fwtab file, line: '$line'"
+		esac
+        #sudo -u $S_UID $FW_EXEC $SWIPE_DIR $DEFERT $RMFREQ 2>&1 > $TMP_FILE
+
+		swipe $SWIPE_DIR $defer_days $RMFREQ 2>&1 > $TMP_FILE
+
+        if [ -s $TMP_FILE ] ; then
+                cat $TMP_FILE >> $LOG_FILE
+        fi
+
+	done <$1
+	
+	rm $TMP_FILE
+}
+
+[ -z $READ_FWTAB ] && [ -z $SWIPE_PATH ] && print_helpmsg_and_exit "Missing dir. path"
+
+if [ -z $READ_FWTAB ]; then 
+	if [ -d $SWIPE_PATH ]; then
+	# absolute directory path
+		ASWIPE_PATH=$(cd $SWIPE_PATH; pwd -P)
+	else
+		print_helpmsg_and_exit "Path is not pointing to directory"
+	fi
+
+	swipe $ASWIPE_PATH $SWIPE_DEFER_DAYS $RM_FREQ
 else
-	# keep last 30 files regardless of age
-	echo "Too low pool ($TO_KEEP_CNT files - min. to keep: $KEEP_MIN_CNT), skipping any removals"
-	SUMMARY="Too low file pool"
+	if [ -n "$SWIPE_PATH" ]; then
+		if [ -f "$SWIPE_PATH" ]; then
+		# absolute directory path
+			READ_FWTAB=$(cd $SWIPE_PATH; pwd -P)
+		else
+			print_helpmsg_and_exit "Provide 'fwtab' file path"
+		fi
+	else
+		if [ ! -f "$READ_FWTAB" ]; then
+			print_helpmsg_and_exit "Missing '$READ_FWTAB' file."
+		fi
+	fi
+
+	read_tabfile "$READ_FWTAB"
 fi
 
-echo "    with result:  $SUMMARY" >> $MARK_FILE
 
 exit 0

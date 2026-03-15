@@ -1,0 +1,11 @@
+
+services:
+  files_wipe:
+    build: .
+    volumes:
+      - ./fileswipe:/usr/local/bin/fileswipe
+      - ./fwtab:/etc/fwtab
+      - ./test:/test
+    environment:
+      - FEAT=update2gnu
+

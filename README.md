@@ -14,7 +14,7 @@ provides:
 * Configuration file
 * Countermeasures to prevent from purging all data
 
-It's a `bash` shell script, thus it is practically 'dependency free' making it a good solution for embedded systems. It can be used to purge mentioned database dump files, but also other periodic backup files or cache files.
+It's a `bash` shell script, thus it is practically 'dependency free' easy to install solution. It can be used to purge mentioned database dump files, but also other periodic backup files or cache files.
 
 ## Usage
 This packege comes with two scripts: 
